@@ -25,14 +25,14 @@ export PDSH_RCMD_TYPE=ssh
 function setup () {
   echo -n " building vms "
   # setup VMs
-  doctl compute droplet create nginx client --region $zone --image $image --size $size --ssh-keys $key --wait > /dev/null 2>&1
+  doctl compute droplet create private client --region $zone --image $image --size $size --ssh-keys $key --wait > /dev/null 2>&1
 
-  export server_ip=$(doctl compute droplet list --no-header | grep nginx | awk '{print $3}')
-  export client_ip=$(doctl compute droplet list --no-header | grep client | awk '{print $3}')
+  export server_ip=$(doctl compute droplet list --no-header | grep -w private | awk '{print $3}')
+  export client_ip=$(doctl compute droplet list --no-header | grep -w client | awk '{print $3}')
 
-  doctl compute domain records create $domain --record-type A --record-name nginx --record-ttl 300 --record-data $server_ip > /dev/null 2>&1
+  doctl compute domain records create $domain --record-type A --record-name private --record-ttl 300 --record-data $server_ip > /dev/null 2>&1
   doctl compute domain records create $domain --record-type A --record-name client --record-ttl 300 --record-data $client_ip > /dev/null 2>&1
-  doctl compute domain records create $domain --record-type CNAME --record-name "*" --record-ttl 150 --record-data nginx.$domain. > /dev/null 2>&1
+  doctl compute domain records create $domain --record-type CNAME --record-name "*" --record-ttl 150 --record-data private.$domain. > /dev/null 2>&1
 
   echo "$GREEN" "ok" "$NORMAL"
 
@@ -95,20 +95,22 @@ useradd -u 1000 -G docker wireguard; reboot' > /dev/null 2>&1
   until [ $(ssh -o ConnectTimeout=1 root@$server_ip 'exit' 2>&1 | grep 'timed out\|refused' | wc -l) = 0 ]; do echo -n "." ;sleep 5; done
   until [ $(ssh -o ConnectTimeout=1 root@$client_ip 'exit' 2>&1 | grep 'timed out\|refused' | wc -l) = 0 ]; do echo -n "." ;sleep 5; done
 
+  sleep 5
+
   echo "$GREEN" "ok" "$NORMAL"
 
   echo -n " deploying nginx, keycloak, vault, and wiregaurd "
-  rsync -avP docker-compose.yaml root@nginx.dockr.life:/opt
+  rsync -avP docker-compose.yaml root@private.dockr.life:/opt  > /dev/null 2>&1
 
   # docker compose all the things
-  ssh root@nginx.dockr.life 'cd /opt; mkdir /opt/{nginx,wireguard,keycloak}; echo "wireguard for the win..." > /opt/nginx/index.html; docker-compose up -d'
+  ssh root@private.dockr.life 'cd /opt; mkdir /opt/{flask,private,wireguard,keycloak}; echo "wireguard for the win..." > /opt/private/index.html; docker-compose up -d' > /dev/null 2>&1
 
   # sleep
   sleep 60
 
   # get peer
-  rsync -avP root@nginx.dockr.life:/opt/wireguard/peer1/peer1.conf .
-  #rsync -avP peer1.conf root@client.dockr.life:/opt/wireguard/wg0.conf
+  rsync -avP root@private.dockr.life:/opt/wireguard/peer1/peer1.conf .  > /dev/null 2>&1
+  rsync -avP peer1.conf root@client.dockr.life:/opt/wireguard/wg0.conf
 
   # load peer into secret
 
@@ -117,23 +119,23 @@ useradd -u 1000 -G docker wireguard; reboot' > /dev/null 2>&1
   export key_token=$(curl -sk -X POST https://keycloak.$domain/auth/realms/master/protocol/openid-connect/token -d 'client_id=admin-cli&username=admin&password='$password'&credentialId=&grant_type=password' | jq -r .access_token)
 
   # add realm
-  curl -sk -X POST https://keycloak.$domain/auth/admin/realms -H "authorization: Bearer $key_token" -H 'accept: application/json, text/plain, */*' -H 'content-type: application/json;charset=UTF-8' -d '{"enabled":true,"id":"stackrox","realm":"stackrox"}'
+  curl -sk -X POST https://keycloak.$domain/auth/admin/realms -H "authorization: Bearer $key_token" -H 'accept: application/json, text/plain, */*' -H 'content-type: application/json;charset=UTF-8' -d '{"enabled":true,"id":"wireguard","realm":"wireguard"}'
 
   # add client
-  curl -sk -X POST https://keycloak.$domain/auth/admin/realms/stackrox/clients -H "authorization: Bearer $key_token" -H 'accept: application/json, text/plain, */*' -H 'content-type: application/json;charset=UTF-8' -d '{"enabled":true,"attributes":{},"redirectUris":[],"clientId":"stackrox","protocol":"openid-connect","publicClient": false,"redirectUris":["https://'$ROX_URL'/sso/providers/oidc/callback"]}'
+  curl -sk -X POST https://keycloak.$domain/auth/admin/realms/wireguard/clients -H "authorization: Bearer $key_token" -H 'accept: application/json, text/plain, */*' -H 'content-type: application/json;charset=UTF-8' -d '{"enabled":true,"attributes":{},"redirectUris":[],"clientId":"wireguard","protocol":"openid-connect","publicClient": false,"redirectUris":["https://flask.dockr.life/*"]}'
   #,"implicitFlowEnabled":true
 
+ # add keycloak user clemenko / Pa22word
+  curl -k https://keycloak.$domain/auth/admin/realms/wireguard/users -H 'Content-Type: application/json' -H "authorization: Bearer $key_token" -d '{"enabled":true,"attributes":{},"groups":[],"credentials":[{"type":"password","value":"Pa22word","temporary":false}],"username":"clemenko","emailVerified":"","firstName":"Andy","lastName":"Clemenko"}' 
+
   # get client id
-  export client_id=$(curl -sk  https://keycloak.$domain/auth/admin/realms/stackrox/clients/ -H "authorization: Bearer $key_token"  | jq -r '.[] | select(.clientId=="stackrox") | .id')
+  export client_id=$(curl -sk  https://keycloak.$domain/auth/admin/realms/wireguard/clients/ -H "authorization: Bearer $key_token"  | jq -r '.[] | select(.clientId=="wireguard") | .id')
 
   # get client_secret
-  export client_secret=$(curl -sk  https://keycloak.$domain/auth/admin/realms/stackrox/clients/$client_id/client-secret -H "authorization: Bearer $key_token" | jq -r .value)
-
-  # add keycloak user clemenko / Pa22word
-  curl -k https://keycloak.$domain/auth/admin/realms/stackrox/users -H 'Content-Type: application/json' -H "authorization: Bearer $key_token" -d '{"enabled":true,"attributes":{},"groups":[],"credentials":[{"type":"password","value":"Pa22word","temporary":false}],"username":"clemenko","emailVerified":"","firstName":"Andy","lastName":"Clemenko"}' 
+  export client_secret=$(curl -sk  https://keycloak.$domain/auth/admin/realms/wireguard/clients/$client_id/client-secret -H "authorization: Bearer $key_token" | jq -r .value)
 
   # copy script to client
-  rsync -avP $0 root@client.dockr.life:/opt/$0
+  rsync -avP wirescale.sh root@client.dockr.life:/etc/wirescale.sh   > /dev/null 2>&1
 
   echo "$GREEN" "ok" "$NORMAL"
 }
@@ -142,9 +144,9 @@ useradd -u 1000 -G docker wireguard; reboot' > /dev/null 2>&1
 function login () {
   echo " login "
   # install bits
-  echo "10.13.13.1 nginx.dockr.life" >> /etc/hosts
+  echo "10.13.13.1 private.site" >> /etc/hosts
 
-  command -v wg >/dev/null 2>&1 || { apt install -y wireguard resolvconf; }
+  command -v wg >/dev/null 2>&1 || { apt install -y wireguard resolvconf ; }  > /dev/null 2>&1
 
   # get creds
   echo -n " - username: "; read username
@@ -177,10 +179,12 @@ function logout () {
 #remove the vms
 function kill () {
   echo -n " killing it all "
-  doctl compute droplet delete --force nginx client
-  for i in $(doctl compute domain records list $domain|grep 'nginx\|client'|awk '{print $1}'); do doctl compute domain records delete -f dockr.life $i; done
+  doctl compute droplet delete --force private client
+  for i in $(doctl compute domain records list $domain|grep 'private\|client'|awk '{print $1}'); do doctl compute domain records delete -f dockr.life $i; done
+  export server_ip=$(doctl compute droplet list --no-header | grep private | awk '{print $3}')
+  export client_ip=$(doctl compute droplet list --no-header | grep client | awk '{print $3}')
   ssh-keygen -q -R client.dockr.life > /dev/null 2>&1
-  ssh-keygen -q -R nginx.dockr.life > /dev/null 2>&1
+  ssh-keygen -q -R private.dockr.life > /dev/null 2>&1
   echo "$GREEN" "ok" "$NORMAL"
 }
 

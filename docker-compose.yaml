@@ -55,15 +55,15 @@ services:
         - "traefik.http.middlewares.testHeader.headers.sslredirect=true"
 
         ports:
-        #- "80:80"
+        - "80:80"
         - "443:443"
         volumes:
         - "/var/run/docker.sock:/var/run/docker.sock:ro"
         - "/opt/traefik/:/opt/traefik/"
   
-    nginx:
+    private:
       image: nginx
-      container_name: "nginx"
+      container_name: "private"
       restart: unless-stopped
       security_opt:
         - no-new-privileges:true
@@ -71,8 +71,27 @@ services:
       depends_on: 
         - wireguard
       volumes:
-        - "/opt/nginx/:/usr/share/nginx/html/:ro"
-  
+        - "/opt/private/:/usr/share/nginx/html/:ro"
+      labels:
+        - "traefik.enable=false"
+
+    flask:
+      image: nginx
+      container_name: "flask"
+      restart: unless-stopped
+      security_opt:
+        - no-new-privileges:true
+      network_mode: service:wireguard
+      depends_on: 
+        - wireguard
+      volumes:
+        - "/opt/flask/client_secrets.json:/code/flask/client_secrets.json:ro"
+      labels:
+        - "traefik.http.routers.flask.rule=Host(`flask.dockr.life`)"
+        - "traefik.http.routers.flask.entrypoints=https"
+        - "traefik.http.routers.flask.tls.certresolver=mytlschallenge"
+        - "traefik.http.services.flask.loadbalancer.server.port=80"
+
     wireguard:
         image: ghcr.io/linuxserver/wireguard
         container_name: wireguard
@@ -105,8 +124,14 @@ services:
         - KEYCLOAK_USER="admin"
         - KEYCLOAK_PASSWORD="Pa22word"
         - KEYCLOAK_DISABLE-TRUST-MANAGER="true"
+        - PROXY_ADDRESS_FORWARDING=true
+        - KEYCLOAK_FRONTENDURL=keycloak.dockr.life
       labels:
-        - "traefik.tcp.routers.keycloak.rule=HostSNI(`keycloak.dockr.life`)"
-        - "traefik.tcp.routers.keycloak.entrypoints=https"
-        - "traefik.tcp.services.keycloak.loadbalancer.server.port=8443"
-        - "traefik.tcp.routers.keycloak.tls.passthrough=true"
+#        - "traefik.tcp.routers.keycloak.rule=HostSNI(`keycloak.dockr.life`)"
+#        - "traefik.tcp.routers.keycloak.entrypoints=https"
+#        - "traefik.tcp.services.keycloak.loadbalancer.server.port=8080"
+#        - "traefik.tcp.routers.keycloak.tls.passthrough=true"
+        - "traefik.http.routers.keycloak.rule=Host(`keycloak.dockr.life`)"
+        - "traefik.http.routers.keycloak.entrypoints=https"
+        - "traefik.http.routers.keycloak.tls.certresolver=mytlschallenge"
+        - "traefik.http.services.keycloak.loadbalancer.server.port=8080"
