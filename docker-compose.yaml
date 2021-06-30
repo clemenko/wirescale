@@ -1,137 +1,133 @@
 services:
-    traefik:
-        image: traefik
-        container_name: "traefik"
-        restart: unless-stopped
-        security_opt:
-        - no-new-privileges:true
-        command:
-        - "--api=true"
-        - "--providers.docker=true"
-        - "--providers.docker.exposedbydefault=true"
-        - "--metrics.prometheus=true"
-        - "--metrics.prometheus.addEntryPointsLabels=true"
-        - "--metrics.prometheus.addServicesLabels=true"
-        - "--accesslog=true"
-        - "--accesslog.filepath=/opt/traefik/access.log"
-        - "--global.sendAnonymousUsage=false"
-        - "--entryPoints.http.address=:80"
-        - "--entryPoints.https.address=:443"
-        - "--certificatesResolvers.mytlschallenge.acme.httpChallenge=true"
-        - "--certificatesResolvers.mytlschallenge.acme.httpChallenge.entryPoint=http"
-        - "--certificatesresolvers.mytlschallenge.acme.email=clemenko@gmail.com"
-        - "--certificatesresolvers.mytlschallenge.acme.storage=/opt/traefik/acme.json"
-        - "--pilot.dashboard=false"
+  traefik:
+    image: traefik
+    container_name: "traefik"
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    command:
+      - "--api=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=true"
+      - "--metrics.prometheus=true"
+      - "--metrics.prometheus.addEntryPointsLabels=true"
+      - "--metrics.prometheus.addServicesLabels=true"
+      - "--accesslog=true"
+      - "--accesslog.filepath=/opt/traefik/access.log"
+      - "--global.sendAnonymousUsage=false"
+      - "--entryPoints.http.address=:80"
+      - "--entryPoints.https.address=:443"
+      - "--certificatesResolvers.mytlschallenge.acme.httpChallenge=true"
+      - "--certificatesResolvers.mytlschallenge.acme.httpChallenge.entryPoint=http"
+      - "--certificatesresolvers.mytlschallenge.acme.email=clemenko@gmail.com"
+      - "--certificatesresolvers.mytlschallenge.acme.storage=/opt/traefik/acme.json"
+      - "--pilot.dashboard=false"
 
-        labels:
-        # Dashboard
-        - "traefik.http.routers.dashboard.rule=Host(`wirein.dockr.life`)"
-        - "traefik.http.routers.dashboard.entrypoints=https"
-        - "traefik.http.routers.dashboard.service=api@internal"
-        - "traefik.http.routers.dashboard.tls.certresolver=mytlschallenge"
+    labels:
+    # Dashboard
+      - "traefik.http.routers.dashboard.rule=Host(`wirein.dockr.life`)"
+      - "traefik.http.routers.dashboard.entrypoints=https"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      - "traefik.http.routers.dashboard.tls.certresolver=mytlschallenge"
 #        - "traefik.http.routers.dashboard.middlewares=https-auth"
 
-        # global redirect HTTPS
-        - "traefik.http.routers.http-catchall.rule=HostRegexp(`{any:.+}`)"
-        - "traefik.http.routers.http-catchall.entrypoints=http"
-        - "traefik.http.routers.http-catchall.middlewares=redirect-to-https@docker"
+    # global redirect HTTPS
+      - "traefik.http.routers.http-catchall.rule=HostRegexp(`{any:.+}`)"
+      - "traefik.http.routers.http-catchall.entrypoints=http"
+      - "traefik.http.routers.http-catchall.middlewares=redirect-to-https@docker"
 
-        # middleware: Redirect HTTP->HTTPS
-        - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
-        - "traefik.http.middlewares.redirect-to-https.redirectscheme.permanent=true"
+    # middleware: Redirect HTTP->HTTPS
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.permanent=true"
 
-        # sts middlewares
-        - "traefik.http.middlewares.servicestls.headers.stsincludesubdomains=false"
-        - "traefik.http.middlewares.servicestls.headers.stspreload=true"
-        - "traefik.http.middlewares.servicestls.headers.stsseconds=15552001"
-        - "traefik.http.middlewares.servicestls.headers.isdevelopment=false"
-        
-        # middleware: Basic Auth
+    # sts middlewares
+      - "traefik.http.middlewares.servicestls.headers.stsincludesubdomains=false"
+      - "traefik.http.middlewares.servicestls.headers.stspreload=true"
+      - "traefik.http.middlewares.servicestls.headers.stsseconds=15552001"
+      - "traefik.http.middlewares.servicestls.headers.isdevelopment=false"
+    
+    # middleware: Basic Auth
 #        - "traefik.http.middlewares.https-auth.basicauth.users=admin:$$apr1$$VkNnnQVA$$nvOkZfQiOtK9XHgm3lvCD1"
 
-        # https proto
-        - "traefik.http.middlewares.testHeader.headers.customrequestheaders.X-Forwarded-Proto=https"
-        - "traefik.http.middlewares.testHeader.headers.framedeny=true"
-        - "traefik.http.middlewares.testHeader.headers.sslredirect=true"
+    # https proto
+      - "traefik.http.middlewares.testHeader.headers.customrequestheaders.X-Forwarded-Proto=https"
+      - "traefik.http.middlewares.testHeader.headers.framedeny=true"
+      - "traefik.http.middlewares.testHeader.headers.sslredirect=true"
 
-        ports:
-        - "80:80"
-        - "443:443"
-        volumes:
-        - "/var/run/docker.sock:/var/run/docker.sock:ro"
-        - "/opt/traefik/:/opt/traefik/"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "/opt/traefik/:/opt/traefik/"
   
-    private:
-      image: nginx
-      container_name: "private"
-      restart: unless-stopped
-      security_opt:
-        - no-new-privileges:true
-      network_mode: service:wireguard
-      depends_on: 
-        - wireguard
-      volumes:
-        - "/opt/private/:/usr/share/nginx/html/:ro"
-      labels:
-        - "traefik.enable=false"
+  private:
+    image: nginx
+    container_name: "private"
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    network_mode: service:wireguard
+    depends_on: 
+      - wireguard
+    volumes:
+      - "/opt/private/:/usr/share/nginx/html/:ro"
+    labels:
+      - "traefik.enable=false"
 
-    flask:
-      image: nginx
-      container_name: "flask"
-      restart: unless-stopped
-      security_opt:
-        - no-new-privileges:true
-      network_mode: service:wireguard
-      depends_on: 
-        - wireguard
-      volumes:
-        - "/opt/flask/client_secrets.json:/code/flask/client_secrets.json:ro"
-      labels:
-        - "traefik.http.routers.flask.rule=Host(`flask.dockr.life`)"
-        - "traefik.http.routers.flask.entrypoints=https"
-        - "traefik.http.routers.flask.tls.certresolver=mytlschallenge"
-        - "traefik.http.services.flask.loadbalancer.server.port=80"
+  flask:
+    image: nginx
+    container_name: "flask"
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    network_mode: service:wireguard
+    depends_on: 
+      - wireguard
+    volumes:
+      - "/opt/flask/client_secrets.json:/code/flask/client_secrets.json:ro"
+    labels:
+      - "traefik.http.routers.flask.rule=Host(`flask.dockr.life`)"
+      - "traefik.http.routers.flask.entrypoints=https"
+      - "traefik.http.routers.flask.tls.certresolver=mytlschallenge"
+      - "traefik.http.services.flask.loadbalancer.server.port=80"
 
-    wireguard:
-        image: ghcr.io/linuxserver/wireguard
-        container_name: wireguard
-        cap_add:
-          - NET_ADMIN
-          - SYS_MODULE
-        environment:
-          - PUID=1000
-          - PGID=1000
-          - TZ=Europe/London
-          - SERVERURL=wireguard.dockr.life #optional
-          - SERVERPORT=51820 #optional
-          - PEERS=1 #optional
-          - PEERDNS=auto #optional
-          - INTERNAL_SUBNET=10.13.13.0 #optional
-          - ALLOWEDIPS=10.13.13.0/24 #optional
-        volumes:
-          - /opt/wireguard:/config
-          - /lib/modules:/lib/modules:ro
-        ports:
-          - 51820:51820/udp
-        sysctls:
-          - net.ipv4.conf.all.src_valid_mark=1
-        restart: unless-stopped
-
-    keycloak:
-      image: quay.io/keycloak/keycloak
-      container_name: "keycloak"
+  wireguard:
+      image: ghcr.io/linuxserver/wireguard
+      container_name: wireguard
+      cap_add:
+        - NET_ADMIN
+        - SYS_MODULE
       environment:
-        - KEYCLOAK_USER="admin"
-        - KEYCLOAK_PASSWORD="Pa22word"
-        - KEYCLOAK_DISABLE-TRUST-MANAGER="true"
-        - PROXY_ADDRESS_FORWARDING=true
-        - KEYCLOAK_FRONTENDURL=keycloak.dockr.life
-      labels:
-#        - "traefik.tcp.routers.keycloak.rule=HostSNI(`keycloak.dockr.life`)"
-#        - "traefik.tcp.routers.keycloak.entrypoints=https"
-#        - "traefik.tcp.services.keycloak.loadbalancer.server.port=8080"
-#        - "traefik.tcp.routers.keycloak.tls.passthrough=true"
-        - "traefik.http.routers.keycloak.rule=Host(`keycloak.dockr.life`)"
-        - "traefik.http.routers.keycloak.entrypoints=https"
-        - "traefik.http.routers.keycloak.tls.certresolver=mytlschallenge"
-        - "traefik.http.services.keycloak.loadbalancer.server.port=8080"
+        - PUID=1000
+        - PGID=1000
+        - TZ=Americas/NewYork
+        - SERVERURL=wireguard.dockr.life 
+        - SERVERPORT=51820 
+        - PEERS=1 
+        - PEERDNS=auto 
+        - INTERNAL_SUBNET=10.13.13.0 
+        - ALLOWEDIPS=10.13.13.0/24 
+      volumes:
+        - /opt/wireguard:/config
+        - /lib/modules:/lib/modules:ro
+      ports:
+        - 51820:51820/udp
+      sysctls:
+        - net.ipv4.conf.all.src_valid_mark=1
+      restart: unless-stopped
+
+  keycloak:
+    image: quay.io/keycloak/keycloak
+    container_name: "keycloak"
+    environment:
+      - KEYCLOAK_USER="admin"
+      - KEYCLOAK_PASSWORD="Pa22word"
+      - KEYCLOAK_DISABLE-TRUST-MANAGER="true"
+      - PROXY_ADDRESS_FORWARDING=true
+      - KEYCLOAK_FRONTENDURL=keycloak.dockr.life
+    labels:
+      - "traefik.http.routers.keycloak.rule=Host(`keycloak.dockr.life`)"
+      - "traefik.http.routers.keycloak.entrypoints=https"
+      - "traefik.http.routers.keycloak.tls.certresolver=mytlschallenge"
+      - "traefik.http.services.keycloak.loadbalancer.server.port=8080"

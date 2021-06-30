@@ -3,14 +3,11 @@
 ## Design
 
 * Server
-  * Traefik ingress
-    * Let's Encrypt
+  * Traefik ingress - Let's Encrypt all the things
   * Private Nginx - Private subnet (10.13.13.0/24)
   * Public Flask - handle OIDC and secret
   * Wiregaurd
   * Keycloak
-    * Front Facing
-    * Secret?
 * Client
 
 ## Considerations
@@ -24,6 +21,7 @@
 
 * https://wirein.dockr.life
 * https://keycloak.dockr.life
+* https://flask.dockr.life
 
 ## How to
 
