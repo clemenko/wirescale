@@ -42,8 +42,10 @@ function setup () {
   until [ $(ssh -o ConnectTimeout=1 root@$server_ip 'exit' 2>&1 | grep 'timed out\|refused' | wc -l) = 0 ]; do echo -n "." ;sleep 5; done
   until [ $(ssh -o ConnectTimeout=1 root@$client_ip 'exit' 2>&1 | grep 'timed out\|refused' | wc -l) = 0 ]; do echo -n "." ;sleep 5; done
 
+  sleep 10
+
   # setup up dockers
-  pdsh -l root -w "$server_ip","$client_ip" 'curl https://get.docker.com/ | bash && export DEBIAN_FRONTEND=noninteractive; apt update && apt upgrade -y && apt autoremove -y; curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose; chmod +x /usr/local/bin/docker-compose; cat << EOF >> /etc/sysctl.conf
+  pdsh -l root -w "$server_ip","$client_ip" 'curl -sSL get.docker.com | sh && curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose; chmod +x /usr/local/bin/docker-compose && cat << EOF >> /etc/sysctl.conf
 # SWAP settings
 vm.swappiness=0
 vm.overcommit_memory=1
@@ -89,7 +91,10 @@ net.ipv4.ip_forward=1
 fs.inotify.max_user_instances=8192
 fs.inotify.max_user_watches=1048576
 EOF
-useradd -u 1000 -G docker wireguard; reboot' > /dev/null 2>&1
+useradd -u 1000 -G docker wireguard' > /dev/null 2>&1
+
+  # updates
+  pdsh -l root -w "$server_ip","$client_ip" 'export DEBIAN_FRONTEND=noninteractive && apt update && # apt upgrade -y && apt autoremove -y && #reboot' > /dev/null 2>&1
 
   # wait for reboot
   until [ $(ssh -o ConnectTimeout=1 root@$server_ip 'exit' 2>&1 | grep 'timed out\|refused' | wc -l) = 0 ]; do echo -n "." ;sleep 5; done
@@ -100,21 +105,30 @@ useradd -u 1000 -G docker wireguard; reboot' > /dev/null 2>&1
   echo "$GREEN" "ok" "$NORMAL"
 
   echo -n " deploying nginx, keycloak, vault, and wiregaurd "
-  rsync -avP docker-compose.yaml root@private.dockr.life:/opt  > /dev/null 2>&1
+  rsync -avP docker-compose.yaml root@$server_ip:/opt  > /dev/null 2>&1
 
   # docker compose all the things
-  ssh root@private.dockr.life 'cd /opt; mkdir /opt/{flask,private,wireguard,keycloak}; echo "wireguard for the win..." > /opt/private/index.html; docker-compose up -d' > /dev/null 2>&1
+  ssh root@$server_ip 'cd /opt; mkdir /opt/{flask,private,wireguard,keycloak}; echo "wireguard for the win..." > /opt/private/index.html' > /dev/null 2>&1
+  rsync -avP realms.json root@$server_ip:/opt/keycloak/  > /dev/null 2>&1
+  rsync -avP client_secrets.json root@$server_ip:/opt/flask/  > /dev/null 2>&1
+  ssh root@$server_ip 'docker-compose --file /opt/docker-compose.yaml up -d' 
 
   # sleep
-  sleep 60
+    until [ $(curl -kIs https://keycloak.dockr.life|head -n1|wc -l) = 1 ]; do echo -n "." ; sleep 5; done
 
   # get peer
-  rsync -avP root@private.dockr.life:/opt/wireguard/peer1/peer1.conf .  > /dev/null 2>&1
-  rsync -avP peer1.conf root@client.dockr.life:/opt/wireguard/wg0.conf
+  #rsync -avP root@$server_ip:/opt/wireguard/peer1/peer1.conf .  > /dev/null 2>&1
+  #rsync -avP peer1.conf root@$client_ip:/opt/wg0.conf > /dev/null 2>&1
 
+  echo "$GREEN" "ok" "$NORMAL"
+
+  echo -n " configuring nginx, keycloak, vault, and wiregaurd "
   # load peer into secret
 
-  # configure keycloak
+
+
+
+ # configure keycloak
   # get auth token - notice keycloak's password 
   export key_token=$(curl -sk -X POST https://keycloak.$domain/auth/realms/master/protocol/openid-connect/token -d 'client_id=admin-cli&username=admin&password='$password'&credentialId=&grant_type=password' | jq -r .access_token)
 
@@ -134,8 +148,15 @@ useradd -u 1000 -G docker wireguard; reboot' > /dev/null 2>&1
   # get client_secret
   export client_secret=$(curl -sk  https://keycloak.$domain/auth/admin/realms/wireguard/clients/$client_id/client-secret -H "authorization: Bearer $key_token" | jq -r .value)
 
+
+
+  
+  # setup vault 
+  # https://testdriven.io/blog/dynamic-secret-generation-with-vault-and-flask/
+
+
   # copy script to client
-  rsync -avP wirescale.sh root@client.dockr.life:/etc/wirescale.sh   > /dev/null 2>&1
+  rsync -avP wirescale.sh root@$client_ip:/etc/wirescale.sh   > /dev/null 2>&1
 
   echo "$GREEN" "ok" "$NORMAL"
 }
@@ -183,8 +204,12 @@ function kill () {
   for i in $(doctl compute domain records list $domain|grep 'private\|client'|awk '{print $1}'); do doctl compute domain records delete -f dockr.life $i; done
   export server_ip=$(doctl compute droplet list --no-header | grep private | awk '{print $3}')
   export client_ip=$(doctl compute droplet list --no-header | grep client | awk '{print $3}')
+  ssh-keygen -q -R $client_ip > /dev/null 2>&1
+  ssh-keygen -q -R $server_ip > /dev/null 2>&1
   ssh-keygen -q -R client.dockr.life > /dev/null 2>&1
   ssh-keygen -q -R private.dockr.life > /dev/null 2>&1
+
+  rm -rf peer1.conf
   echo "$GREEN" "ok" "$NORMAL"
 }
 

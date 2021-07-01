@@ -3,10 +3,10 @@
 ## Design
 
 * Server
-  * Traefik ingress - Let's Encrypt all the things
-  * Private Nginx - Private subnet (10.13.13.0/24)
+  * Traefik ingress - Let's Encrypt all the thing
   * Public Flask - handle OIDC and secret
   * Wiregaurd
+    * Private Nginx - Private subnet (10.13.13.0/24)
   * Keycloak
 * Client
 
@@ -15,7 +15,7 @@
 * Docker all the things
 * keycloak CA
 * Key rotation
-* Vault or AWS Store is not needed.
+* Vault - is not needed
 
 ## Links
 
@@ -27,9 +27,9 @@
 
 ### Setup
 
-`./wirescale.sh setup`
+`./wirescale.sh up`
 
-### Run
+### Run on Client
 
 `./wirescale.sh login`
 `./wirescale.sh logout`

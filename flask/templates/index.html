@@ -1,23 +1,33 @@
 <!doctype html>
 <html>
 <head>
-    <title>Flask/Redis/Mongo</title>
+    <title>WireScale</title>
     <style>
-    body  {
-      background-image: url("/static/teleport.png");
-      color : white
-      }
+    body  { background-image: url("/static/teleport.png"); background-color : rgb(76, 121, 245); color: white }
     a { color: white; }
+    .button {
+      background-color: #e7e7e7; border: none;
+      color: black; padding: 15px 32px; text-align: center;
+      text-decoration: none; display: inline-block;
+      font-size: 16px; margin: 4px 2px; cursor: pointer;
+    }
+
+    .box { position:relative; position:absolute; bottom:0; right:0; padding: 5px;}
     </style>
 
 </head>
 <body>
-<div class="container">
-  <!--  <img src=/static/rancherio_logo.png></img> -->
+  <div class="container">
     <center>
-    <h1> </h1>
-
-    <p>Contact me at : <a href="mailto:clemenko@gmail.com">clemenko@gmail.com</a>.</p>
-
-</div>
+    <h1>WireScale all the things...</h1>
+    {% if logged_in == 'false' %}
+      <button class="button"><a href="./login">Login</a></button>
+    {% else %}
+       <p>Welcome {{ username }}</p>
+       <p>todays code : {{ code }} </p>
+      <button class="button"><a href="./logout">Logout</a></button>
+    {% endif %}
+    </center>
+  </div>
+  <div class="box"> <a href="mailto:clemenko@gmail.com">clemenko@gmail.com</a></div>
 </body>

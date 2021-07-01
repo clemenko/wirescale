@@ -1,12 +1,14 @@
-from flask import Flask, render_template, jsonify, g
+from flask import Flask, render_template, jsonify, g, redirect
 from flask_oidc import OpenIDConnect
 
 import json
 import logging
 import os
+import base64
 
 logging.basicConfig(level=logging.DEBUG)
 
+image_file=open("peer1.conf", "rb")
 
 version = "0.1"
 app = Flask(__name__)
@@ -23,7 +25,6 @@ app.config.update({
 })
 oidc = OpenIDConnect(app)
 
-
 @app.route('/healthz')
 def health_check():
     return jsonify({'flask': 'up'}), 200
@@ -31,30 +32,25 @@ def health_check():
 @app.route('/')
 def index(server_name=None):
     if oidc.user_loggedin:
-        return ('Hello, %s, <a href="/login">See login</a> '
-                '<a href="/logout">Log out</a>') % \
-            oidc.user_getfield('preferred_username')
+        logged_in='true'
     else:
-        return render_template('login.html')
-
+        logged_in='false'
+    return render_template('index.html', logged_in=logged_in, username='', code=base64.b64encode(open("peer1.conf", "rb").read()).decode('utf-8'))
 
 @app.route('/login')
 @oidc.require_login
 def login():
-    return 'Welcome %s' % oidc.user_getfield('preferred_username')
+    return redirect('/')
 
+@app.route('/logout')
+def logout():
+    oidc.logout()
+    return redirect('/')
 
 @app.route('/api')
 @oidc.accept_token(True, ['openid'])
 def hello_api():
     return json.dumps({'hello': 'Welcome %s' % g.oidc_token_info['sub']})
-
-
-@app.route('/logout')
-def logout():
-    oidc.logout()
-    return 'Hi, you have been logged out! <a href="/">Return</a>'
-
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0',debug=True)
