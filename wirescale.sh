@@ -184,10 +184,13 @@ function logout () {
 #remove the vms
 function kill () {
   echo -n " killing it all "
+  export server_ip=$(doctl compute droplet list --no-header | grep -w private | awk '{print $3}')
+  export client_ip=$(doctl compute droplet list --no-header | grep -w client | awk '{print $3}')
+  
   doctl compute droplet delete --force private client
+  
   for i in $(doctl compute domain records list $domain|grep 'private\|client'|awk '{print $1}'); do doctl compute domain records delete -f dockr.life $i; done
-  export server_ip=$(doctl compute droplet list --no-header | grep private | awk '{print $3}')
-  export client_ip=$(doctl compute droplet list --no-header | grep client | awk '{print $3}')
+
   ssh-keygen -q -R $client_ip > /dev/null 2>&1
   ssh-keygen -q -R $server_ip > /dev/null 2>&1
   ssh-keygen -q -R client.dockr.life > /dev/null 2>&1
