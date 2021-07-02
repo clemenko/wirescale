@@ -8,10 +8,7 @@ services:
     command:
       - "--api=true"
       - "--providers.docker=true"
-      - "--providers.docker.exposedbydefault=true"
-      - "--metrics.prometheus=true"
-      - "--metrics.prometheus.addEntryPointsLabels=true"
-      - "--metrics.prometheus.addServicesLabels=true"
+      - "--providers.docker.exposedbydefault=false"
       - "--accesslog=true"
       - "--accesslog.filepath=/opt/traefik/access.log"
       - "--global.sendAnonymousUsage=false"
@@ -24,8 +21,10 @@ services:
       - "--pilot.dashboard=false"
 
     labels:
+      - "traefik.enable=true"
+
     # Dashboard
-      - "traefik.http.routers.dashboard.rule=Host(`wirein.dockr.life`)"
+      - "traefik.http.routers.dashboard.rule=Host(`in.dockr.life`)"
       - "traefik.http.routers.dashboard.entrypoints=https"
       - "traefik.http.routers.dashboard.service=api@internal"
       - "traefik.http.routers.dashboard.tls.certresolver=mytlschallenge"
@@ -72,8 +71,6 @@ services:
       - wireguard
     volumes:
       - "/opt/private/:/usr/share/nginx/html/:ro"
-    labels:
-      - "traefik.enable=false"
 
   flask:
     image: clemenko/wireflask
@@ -84,9 +81,10 @@ services:
     depends_on: 
       - wireguard
     volumes:
-      - "/opt/flask/client_secrets.json:/code/client_secrets.json:ro"
-      - "/opt/wireguard/peer1/peer1.conf:/code/peer1.conf:ro"
+      - "/opt/flask/:/code/secrets/:ro"
+      - "/opt/wireguard/peer1/:/code/peer1/:ro"
     labels:
+      - "traefik.enable=true"
       - "traefik.http.routers.flask.rule=Host(`flask.dockr.life`)"
       - "traefik.http.routers.flask.entrypoints=https"
       - "traefik.http.routers.flask.tls.certresolver=mytlschallenge"
@@ -124,13 +122,26 @@ services:
       - KEYCLOAK_PASSWORD="Pa22word"
       - KEYCLOAK_DISABLE-TRUST-MANAGER="true"
       - PROXY_ADDRESS_FORWARDING=true
-      - KEYCLOAK_FRONTENDURL=keycloak.dockr.life
-      - KEYCLOAK_IMPORT="/opt/keycloak/realms.json -Dkeycloak.profile.feature.upload_scripts=enabled"
+      - KEYCLOAK_FRONTENDURL=key.dockr.life
+    command:
+      - "-b 0.0.0.0 -Dkeycloak.import=/opt/keycloak/realms.json"
     labels:
-      - "traefik.http.routers.keycloak.rule=Host(`keycloak.dockr.life`)"
+      - "traefik.enable=true"
+      - "traefik.http.routers.keycloak.rule=Host(`key.dockr.life`)"
       - "traefik.http.routers.keycloak.entrypoints=https"
       - "traefik.http.routers.keycloak.tls.certresolver=mytlschallenge"
       - "traefik.http.services.keycloak.loadbalancer.server.port=8080"
     volumes:
       - "/opt/keycloak/:/opt/keycloak/"
     restart: unless-stopped
+
+  vault:
+    image: vault
+    container_name: vault
+    ports:
+      - "127.0.0.1:8200:8200"
+    volumes:
+      - /opt/vault/:/vault/config/:ro
+    cap_add:
+      - IPC_LOCK
+    entrypoint: vault server -config=/vault/config/vault.json

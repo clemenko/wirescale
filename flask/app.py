@@ -8,8 +8,6 @@ import base64
 
 logging.basicConfig(level=logging.DEBUG)
 
-image_file=open("peer1.conf", "rb")
-
 version = "0.1"
 app = Flask(__name__)
 app.config['JSONIFY_PRETTYPRINT_REGULAR'] = False
@@ -18,10 +16,11 @@ app.config.update({
     'SECRET_KEY': 'SomethingNotEntirelySecret',
     'TESTING': True,
     'DEBUG': True,
-    'OIDC_CLIENT_SECRETS': 'client_secrets.json',
+    'OIDC_CLIENT_SECRETS': '/code/secrets/client_secrets.json',
     'OIDC_ID_TOKEN_COOKIE_SECURE': False,
     'OIDC_REQUIRE_VERIFIED_EMAIL': False,
-    'OIDC_OPENID_REALM': 'https://flask.dockr.life/oidc_callback'
+    'OIDC_OPENID_REALM': 'wireguard',
+    'OIDC_ID_TOKEN_COOKIE_NAME': 'oidc_token'
 })
 oidc = OpenIDConnect(app)
 
@@ -30,12 +29,14 @@ def health_check():
     return jsonify({'flask': 'up'}), 200
 
 @app.route('/')
-def index(server_name=None):
+def index():
     if oidc.user_loggedin:
         logged_in='true'
+        zusername=oidc.user_getfield('preferred_username')
     else:
         logged_in='false'
-    return render_template('index.html', logged_in=logged_in, username='', code=base64.b64encode(open("peer1.conf", "rb").read()).decode('utf-8'))
+        zusername=''
+    return render_template('index.html', logged_in=logged_in, username=zusername, code=base64.b64encode(open("/code/peer1/peer1.conf", "rb").read()).decode('utf-8'))
 
 @app.route('/login')
 @oidc.require_login
@@ -47,10 +48,10 @@ def logout():
     oidc.logout()
     return redirect('/')
 
-@app.route('/api')
-@oidc.accept_token(True, ['openid'])
+@app.route('/api', methods=['POST'])
+@oidc.accept_token(require_token=True)
 def hello_api():
-    return json.dumps({'hello': 'Welcome %s' % g.oidc_token_info['sub']})
+    return json.dumps({'key': base64.b64encode(open("/code/peer1/peer1.conf", "rb").read()).decode('utf-8')})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0',debug=True)

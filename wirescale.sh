@@ -94,7 +94,7 @@ EOF
 useradd -u 1000 -G docker wireguard' > /dev/null 2>&1
 
   # updates
-  pdsh -l root -w "$server_ip","$client_ip" 'export DEBIAN_FRONTEND=noninteractive && apt update && # apt upgrade -y && apt autoremove -y && #reboot' > /dev/null 2>&1
+  pdsh -l root -w "$server_ip","$client_ip" 'export DEBIAN_FRONTEND=noninteractive && apt update && apt upgrade -y && apt autoremove -y && reboot' > /dev/null 2>&1
 
   # wait for reboot
   until [ $(ssh -o ConnectTimeout=1 root@$server_ip 'exit' 2>&1 | grep 'timed out\|refused' | wc -l) = 0 ]; do echo -n "." ;sleep 5; done
@@ -108,55 +108,27 @@ useradd -u 1000 -G docker wireguard' > /dev/null 2>&1
   rsync -avP docker-compose.yaml root@$server_ip:/opt  > /dev/null 2>&1
 
   # docker compose all the things
-  ssh root@$server_ip 'cd /opt; mkdir /opt/{flask,private,wireguard,keycloak}; echo "wireguard for the win..." > /opt/private/index.html' > /dev/null 2>&1
-  rsync -avP realms.json root@$server_ip:/opt/keycloak/  > /dev/null 2>&1
-  rsync -avP client_secrets.json root@$server_ip:/opt/flask/  > /dev/null 2>&1
-  ssh root@$server_ip 'docker-compose --file /opt/docker-compose.yaml up -d' 
+  ssh root@$server_ip 'cd /opt; mkdir /opt/{flask,private,wireguard,keycloak,vault}; echo "wireguard for the win..." > /opt/private/index.html' > /dev/null 2>&1
+  rsync -avP json/realms.json root@$server_ip:/opt/keycloak/  > /dev/null 2>&1
+  rsync -avP json/client_secrets.json root@$server_ip:/opt/flask/  > /dev/null 2>&1
+  rsync -avP json/vault.json root@$server_ip:/opt/vault/  > /dev/null 2>&1
+  ssh root@$server_ip 'docker-compose --file /opt/docker-compose.yaml up -d'  > /dev/null 2>&1
 
   # sleep
-    until [ $(curl -kIs https://keycloak.dockr.life|head -n1|wc -l) = 1 ]; do echo -n "." ; sleep 5; done
+    until [ $(curl -kIs https://key.dockr.life|head -n1|wc -l) = 1 ]; do echo -n "." ; sleep 5; done
 
   # get peer
-  #rsync -avP root@$server_ip:/opt/wireguard/peer1/peer1.conf .  > /dev/null 2>&1
-  #rsync -avP peer1.conf root@$client_ip:/opt/wg0.conf > /dev/null 2>&1
+  rsync -avP root@$server_ip:/opt/wireguard/peer1/peer1.conf .  > /dev/null 2>&1
 
   echo "$GREEN" "ok" "$NORMAL"
 
-  echo -n " configuring nginx, keycloak, vault, and wiregaurd "
-  # load peer into secret
+  echo -n " configuring nginx, keycloak, vault, and wiregaurd "  
 
-
-
-
- # configure keycloak
-  # get auth token - notice keycloak's password 
-  export key_token=$(curl -sk -X POST https://keycloak.$domain/auth/realms/master/protocol/openid-connect/token -d 'client_id=admin-cli&username=admin&password='$password'&credentialId=&grant_type=password' | jq -r .access_token)
-
-  # add realm
-  curl -sk -X POST https://keycloak.$domain/auth/admin/realms -H "authorization: Bearer $key_token" -H 'accept: application/json, text/plain, */*' -H 'content-type: application/json;charset=UTF-8' -d '{"enabled":true,"id":"wireguard","realm":"wireguard"}'
-
-  # add client
-  curl -sk -X POST https://keycloak.$domain/auth/admin/realms/wireguard/clients -H "authorization: Bearer $key_token" -H 'accept: application/json, text/plain, */*' -H 'content-type: application/json;charset=UTF-8' -d '{"enabled":true,"attributes":{},"redirectUris":[],"clientId":"wireguard","protocol":"openid-connect","publicClient": false,"redirectUris":["https://flask.dockr.life/*"]}'
-  #,"implicitFlowEnabled":true
-
- # add keycloak user clemenko / Pa22word
-  curl -k https://keycloak.$domain/auth/admin/realms/wireguard/users -H 'Content-Type: application/json' -H "authorization: Bearer $key_token" -d '{"enabled":true,"attributes":{},"groups":[],"credentials":[{"type":"password","value":"Pa22word","temporary":false}],"username":"clemenko","emailVerified":"","firstName":"Andy","lastName":"Clemenko"}' 
-
-  # get client id
-  export client_id=$(curl -sk  https://keycloak.$domain/auth/admin/realms/wireguard/clients/ -H "authorization: Bearer $key_token"  | jq -r '.[] | select(.clientId=="wireguard") | .id')
-
-  # get client_secret
-  export client_secret=$(curl -sk  https://keycloak.$domain/auth/admin/realms/wireguard/clients/$client_id/client-secret -H "authorization: Bearer $key_token" | jq -r .value)
-
-
-
-  
   # setup vault 
-  # https://testdriven.io/blog/dynamic-secret-generation-with-vault-and-flask/
 
 
   # copy script to client
-  rsync -avP wirescale.sh root@$client_ip:/etc/wirescale.sh   > /dev/null 2>&1
+  rsync -avP wirescale.sh root@$client_ip:/opt/wirescale.sh   > /dev/null 2>&1
 
   echo "$GREEN" "ok" "$NORMAL"
 }
@@ -165,22 +137,30 @@ useradd -u 1000 -G docker wireguard' > /dev/null 2>&1
 function login () {
   echo " login "
   # install bits
-  echo "10.13.13.1 private.site" >> /etc/hosts
+  if ! grep -q "private.site" /etc/hosts; then echo "10.13.13.1 private.site" >> /etc/hosts; fi
 
-  command -v wg >/dev/null 2>&1 || { apt install -y wireguard resolvconf ; }  > /dev/null 2>&1
+  command -v wg >/dev/null 2>&1 || { echo -n "  - installing wiregaurd"; apt install -y wireguard resolvconf > /dev/null 2>&1 ; echo "$GREEN" "ok" "$NORMAL"; } 
+  command -v jq >/dev/null 2>&1 || { echo -n "  - installing jq"; apt install -y jq > /dev/null 2>&1 ; echo "$GREEN" "ok" "$NORMAL"; } 
 
   # get creds
   echo -n " - username: "; read username
   echo -n " - password: "; read -s password; echo 
 
   # get token from auth
+  key_token=$(curl -sk -X POST https://key.$domain/auth/realms/wireguard/protocol/openid-connect/token -d 'client_id=admin-cli&username='$username'&password='$password'&credentialId=&grant_type=password' | jq -r .access_token)
+
+  # get code from flask
+  if [ $key_token != "null" ]; then 
+    curl -sX POST https://flask.$domain/api -d 'access_token='$key_token'' | jq -r .key | base64 -d > /etc/wireguard/wg0.conf
+  fi
 
   # turn it on
-  if [ -f /etc/wireguard/wg0.conf ]; then wg-quick up wg0
+  if [ -f /etc/wireguard/wg0.conf ]; then wg-quick up wg0 > /dev/null 2>&1
   else  echo " $RED no wireguard config file found. $NORMAL"; exit ; fi
 
   # test
-  # curl nginx.dockr.life
+  echo -n " - curl - "
+  curl private.site
 
   echo "$GREEN" "ok" "$NORMAL"
 }
@@ -188,10 +168,14 @@ function login () {
 ############################# logout ###############################
 function logout () {
   echo -n " logout "
-  wg-quick down wg0
+  if [ ! -f /etc/wireguard/wg0.conf ]; then echo " - $RED Looks like you are logged out. $NORMAL "; exit; fi
 
-  # test
+  wg-quick down wg0 > /dev/null 2>&1
+
+  # cleanup
   rm -rf /etc/wiregaurd/wg0.conf
+
+  sed -i '/private.site/d' /etc/hosts
 
   echo "$GREEN" "ok" "$NORMAL"
 }
