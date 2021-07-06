@@ -210,7 +210,7 @@ function kill () {
   ssh-keygen -q -R client.dockr.life > /dev/null 2>&1
   ssh-keygen -q -R private.dockr.life > /dev/null 2>&1
 
-  rm -rf peer1.conf
+  rm -rf peer1.conf vault_token.json
   echo "$GREEN" "ok" "$NORMAL"
 }
 
