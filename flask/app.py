@@ -4,7 +4,7 @@ from flask_oidc import OpenIDConnect
 import json
 import logging
 import os
-import base64
+import requests
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -24,6 +24,14 @@ app.config.update({
 })
 oidc = OpenIDConnect(app)
 
+def get_token ():
+    url = 'https://vault.dockr.life/v1/wire/data/peer1'
+    token_value = json.loads(open("/code/secrets/vault_token.json", "rb").read())
+    headers = {'x-vault-token': token_value["root_token"]}
+    resp = requests.get(url, headers=headers).json()
+    peer = resp["data"]["data"]["peer1"]
+    return peer
+
 @app.route('/healthz')
 def health_check():
     return jsonify({'flask': 'up'}), 200
@@ -36,7 +44,10 @@ def index():
     else:
         logged_in='false'
         zusername=''
-    return render_template('index.html', logged_in=logged_in, username=zusername, code=base64.b64encode(open("/code/peer1/peer1.conf", "rb").read()).decode('utf-8'))
+
+    peer = get_token()
+
+    return render_template('index.html', logged_in=logged_in, username=zusername, code=peer)
 
 @app.route('/login')
 @oidc.require_login
@@ -51,7 +62,8 @@ def logout():
 @app.route('/api', methods=['POST'])
 @oidc.accept_token(require_token=True)
 def hello_api():
-    return json.dumps({'key': base64.b64encode(open("/code/peer1/peer1.conf", "rb").read()).decode('utf-8')})
+    peer = get_token()
+    return json.dumps({'key': peer})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0',debug=True)

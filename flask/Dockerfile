@@ -14,7 +14,7 @@ LABEL org.opencontainers.image.authors="clemenko@gmail.com" \
 RUN apk -U upgrade && apk add --no-cache python3 curl py3-pip &&\
     pip3 install --no-cache-dir --upgrade pip &&\
     pip3 install --no-cache-dir flask Flask-OIDC &&\
-    apk --purge del apk-tools &&\
+    #apk --purge del apk-tools &&\
     rm -rf /var/cache/apk/*
     
 WORKDIR /code

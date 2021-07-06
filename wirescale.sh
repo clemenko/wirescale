@@ -112,7 +112,7 @@ useradd -u 1000 -G docker wireguard' > /dev/null 2>&1
   rsync -avP json/realms.json root@$server_ip:/opt/keycloak/  > /dev/null 2>&1
   rsync -avP json/client_secrets.json root@$server_ip:/opt/flask/  > /dev/null 2>&1
   rsync -avP json/vault.json root@$server_ip:/opt/vault/  > /dev/null 2>&1
-  ssh root@$server_ip 'docker-compose --file /opt/docker-compose.yaml up -d'  > /dev/null 2>&1
+  ssh root@$server_ip 'docker-compose --file /opt/docker-compose.yaml up -d traefik wiregaurd private keycloak vault'  > /dev/null 2>&1
 
   # sleep
     until [ $(curl -kIs https://key.dockr.life|head -n1|wc -l) = 1 ]; do echo -n "." ; sleep 5; done
@@ -125,7 +125,21 @@ useradd -u 1000 -G docker wireguard' > /dev/null 2>&1
   echo -n " configuring nginx, keycloak, vault, and wiregaurd "  
 
   # setup vault 
+  vault_combo=$(curl -skX PUT https://vault.dockr.life/v1/sys/init -d '{"secret_shares":1,"secret_threshold":1}')
+  echo $vault_combo > vault_token.json
+  vault_key=$(echo $vault_combo| jq -r .keys[] )
+  vault_token=$(echo $vault_combo| jq -r .root_token )
 
+  curl -skX PUT https://vault.dockr.life/v1/sys/unseal -d '{"key":"'$vault_key'"}'  > /dev/null 2>&1
+  curl -skX POST https://vault.dockr.life/v1/sys/mounts/wire -H "x-vault-token: $vault_token" -d '{"path":"wire","type":"kv","config":{},"options":{"version":2},"generate_signing_key":true}' 
+
+  base64_peer1=$(cat peer1.conf | base64)
+
+  curl -skX PUT 'https://vault.dockr.life/v1/wire/data/peer1' -H "x-vault-token: $vault_token" -d '{"data":{"peer1":"'$base64_peer1'"},"options":{"cas":0}}'  > /dev/null 2>&1
+
+  rsync -avP vault_token.json root@$server_ip:/opt/flask/
+
+  ssh root@$server_ip 'docker-compose --file /opt/docker-compose.yaml up -d flask'  > /dev/null 2>&1
 
   # copy script to client
   rsync -avP wirescale.sh root@$client_ip:/opt/wirescale.sh   > /dev/null 2>&1

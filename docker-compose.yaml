@@ -28,7 +28,7 @@ services:
       - "traefik.http.routers.dashboard.entrypoints=https"
       - "traefik.http.routers.dashboard.service=api@internal"
       - "traefik.http.routers.dashboard.tls.certresolver=mytlschallenge"
-#        - "traefik.http.routers.dashboard.middlewares=https-auth"
+      # - "traefik.http.routers.dashboard.middlewares=https-auth"
 
     # global redirect HTTPS
       - "traefik.http.routers.http-catchall.rule=HostRegexp(`{any:.+}`)"
@@ -46,7 +46,7 @@ services:
       - "traefik.http.middlewares.servicestls.headers.isdevelopment=false"
     
     # middleware: Basic Auth
-#        - "traefik.http.middlewares.https-auth.basicauth.users=admin:$$apr1$$VkNnnQVA$$nvOkZfQiOtK9XHgm3lvCD1"
+      # - "traefik.http.middlewares.https-auth.basicauth.users=admin:$$apr1$$VkNnnQVA$$nvOkZfQiOtK9XHgm3lvCD1"
 
     # https proto
       - "traefik.http.middlewares.testHeader.headers.customrequestheaders.X-Forwarded-Proto=https"
@@ -82,7 +82,6 @@ services:
       - wireguard
     volumes:
       - "/opt/flask/:/code/secrets/:ro"
-      - "/opt/wireguard/peer1/:/code/peer1/:ro"
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.flask.rule=Host(`flask.dockr.life`)"
@@ -145,3 +144,10 @@ services:
     cap_add:
       - IPC_LOCK
     entrypoint: vault server -config=/vault/config/vault.json
+    environment:
+      - VAULT_ADDR=http://127.0.0.1:8200
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.vault.rule=Host(`vault.dockr.life`)"
+      - "traefik.http.routers.vault.entrypoints=https"
+      - "traefik.http.routers.vault.tls.certresolver=mytlschallenge"
