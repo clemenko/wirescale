@@ -112,7 +112,7 @@ useradd -u 1000 -G docker wireguard' > /dev/null 2>&1
   rsync -avP json/realms.json root@$server_ip:/opt/keycloak/  > /dev/null 2>&1
   rsync -avP json/client_secrets.json root@$server_ip:/opt/flask/  > /dev/null 2>&1
   rsync -avP json/vault.json root@$server_ip:/opt/vault/  > /dev/null 2>&1
-  ssh root@$server_ip 'docker-compose --file /opt/docker-compose.yaml up -d traefik wiregaurd private keycloak vault'  > /dev/null 2>&1
+  ssh root@$server_ip 'docker-compose --file /opt/docker-compose.yaml up -d traefik wireguard private keycloak vault'  > /dev/null 2>&1
 
   # sleep
     until [ $(curl -kIs https://key.dockr.life|head -n1|wc -l) = 1 ]; do echo -n "." ; sleep 5; done
