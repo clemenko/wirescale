@@ -28,7 +28,7 @@ services:
       - "traefik.http.routers.dashboard.entrypoints=https"
       - "traefik.http.routers.dashboard.service=api@internal"
       - "traefik.http.routers.dashboard.tls.certresolver=mytlschallenge"
-      # - "traefik.http.routers.dashboard.middlewares=https-auth"
+      - "traefik.http.routers.dashboard.middlewares=https-auth"
 
     # global redirect HTTPS
       - "traefik.http.routers.http-catchall.rule=HostRegexp(`{any:.+}`)"
@@ -46,7 +46,7 @@ services:
       - "traefik.http.middlewares.servicestls.headers.isdevelopment=false"
     
     # middleware: Basic Auth
-      # - "traefik.http.middlewares.https-auth.basicauth.users=admin:$$apr1$$VkNnnQVA$$nvOkZfQiOtK9XHgm3lvCD1"
+      - "traefik.http.middlewares.https-auth.basicauth.users=admin:$$apr1$$VkNnnQVA$$nvOkZfQiOtK9XHgm3lvCD1"
 
     # https proto
       - "traefik.http.middlewares.testHeader.headers.customrequestheaders.X-Forwarded-Proto=https"
